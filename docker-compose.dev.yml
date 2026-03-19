@@ -41,10 +41,8 @@ services:
 
   postgres-db:
     image: postgres:16
-    environment:
-      - POSTGRES_DB=expense_tracker
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+    env_file:
+      - /backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

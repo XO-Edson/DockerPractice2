@@ -1,28 +1,25 @@
 services:
 
-  frontend:
+  nginx:
     build: 
       context: ./frontend
-      dockerfile: Dockerfile
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-    volumes:
-      - ./frontend:/usr/src/app
-      - /usr/src/app/node_modules
+      dockerfile: Dockerfile.prod
     networks:
       - expense-network
     depends_on:
       - backend
-    ports:
-      - "5173:5173"
     restart: unless-stopped
+    ports:
+      - "80:80"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   backend:
     build: 
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/usr/src/app
     env_file:
       - ./backend/.env
     environment:
@@ -30,21 +27,36 @@ services:
     networks:
       - expense-network
     depends_on:
+      migrate:
+         condition: service_completed_successfully
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      - POSTGRES_HOST=postgres-db
+    depends_on:
       postgres-db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    command: >
-      sh -c "python manage.py migrate &&
-           python manage.py runserver 0.0.0.0:8000"
+    networks:
+      - expense-network
+    command: python manage.py migrate
+    restart: "no"
 
   postgres-db:
     image: postgres:16
-    environment:
-      - POSTGRES_DB=expense_tracker
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+    env_file:
+      - ./backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
